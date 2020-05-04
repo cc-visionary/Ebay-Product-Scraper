@@ -16,12 +16,13 @@ from random import randint
 
 class EbayScraper():
     def __init__(self):
-        self.item_ids = []
-        self.seller_ids = []
-        self.sellers = {}
+        self.item_ids = []   # store the item ids
+        self.seller_ids = [] # store the seller ids
+        self.sellers = {}    # 
         self.chromeOptions = Options() 
         self.base_url = 'https://www.ebay.co.uk/'
         self.tag = 'itm/' # % is the item id
+        self.total_time = 0
 
     def start(self):
         start_time = datetime.now()
@@ -40,16 +41,23 @@ class EbayScraper():
         
         driver = self.runDriver()
         for i, item in enumerate(self.item_ids):
+            item_start = datetime.now()
             print('{}/{}: Scraping Item {}:'.format(i + 1, numItems, item))
             self.getPage(driver, self.base_url + self.tag + str(item))
             best_match_seller = None
             best_match_id = None
             sort_match_seller = None
             sort_match_id = None
-            item_price = self.scrapePrice(driver) # Item ID's Lowest Price
-            title = self.scrapeTitle(driver) # Item ID's Product Title
-            seller = self.scrapeISeller(driver)
-            sold_out = self.scrapeSoldOut(driver)
+            first_seller = None
+            first_id = None
+            best_match_price = None
+            sort_seller = None
+            sort_id = None
+            sort_price = None
+            item_price = self.scrapePrice(driver)   # Item ID's Lowest Price
+            title = self.scrapeTitle(driver)        # Item ID's Product Title
+            seller = self.scrapeISeller(driver)     # Item ID's Seller
+            sold_out = self.scrapeSoldOut(driver)   # Determine's whether Item ID is sold out or not
             if(title != None or item_price != None):
                 if(sold_out == None):
                     sold_out = 'No'
@@ -70,7 +78,7 @@ class EbayScraper():
                             best_match_seller = 'No'
                     
                     if(first_id):
-                        if(first_id == item):
+                        if(str(first_id) == str(item)):
                             best_match_id = 'Yes'
                         else:
                             best_match_id = 'No'
@@ -90,24 +98,21 @@ class EbayScraper():
                         else:
                             sort_match_seller = 'No'
                     if(sort_id):
-                        if(sort_id == item):
+                        if(str(sort_id) == str(item)):
                             sort_match_id = 'Yes'
                         else:
                             sort_match_id = 'No'
 
                     sort_price = self.scrapeSortPrice(driver)
                 else:
-                    first_seller = None
-                    first_id = None
-                    best_match_price = None
-                    sort_seller = None
-                    sort_id = None
-                    sort_price = None
                     print('\tINFO: Item {} has 0 Best Match in the Search Results.'.format(item))
+                    
+            if(seller == None):
+                seller = ' '
             if(seller not in self.sellers.keys()):
                 self.sellers[seller] = []
                 
-            self.sellers[seller].append([
+            temp_list = [
                 item,               # item id
                 item_price,         # item price
                 title,              # title
@@ -115,20 +120,37 @@ class EbayScraper():
                 sold_out,           # sold out (yes/no)
                 first_id,           # best match first id
                 best_match_id,      # best match same id(yes/no)
-                first_seller,       # best match seller id (seller )
+                first_seller,       # best match seller is one of the sellers
                 best_match_seller,  # best match same seller
                 best_match_price,   # best match second price
                 sort_id,            # sort first id
                 sort_match_id,      # sort same id
-                sort_seller,        # sort seller id 
+                sort_seller,        # sort seller is one of the sellers
                 sort_match_seller,  # sort same seller
                 sort_price          # sort price
-            ])
+            ]
+            for index, l in enumerate(temp_list):
+                temp_list[index] = str(l) if l != None else ' '
+            self.sellers[seller].append(temp_list)
             # time.sleep(randint(0,3))
+            current_time = self.convertToSec(datetime.now() - item_start) # calculates the time it took
+            self.total_time += current_time
+            print('{}/{}: Succesfully scraped Item {}. Time Taken: {}s\n'.format(i + 1, numItems, item, current_time))
         self.saveData(workbook)
         self.closeDriver(driver)
-        print(datetime.now() - start_time)
+        print('Congratulations! You\'ve successfully scraped {}'.format())
+        print('Stats:')
+        print('\tAverage Time per Product: {}s'.format(round(self.total_time / 200, 2)))
+        total_time = str(datetime.now() - start_time).split(':')
+        print('\tTotal Time it took: {}hour(s) {}minute(s) {}second(s)'.format(total_time[0], total_time[1], total_time[2]))
+        garbage_value = input('Please press enter to exit...')
+        exit()
+
+    # Converts Timedelta into Seconds (ex. 00:01:31.2134 -> 91)
+    def convertToSec(self, time):
+        return int(str(time).split(':')[0]) * 360 + int(str(time).split(':')[1]) * 60 + int(str(time).split(':')[2][:2])
             
+    # Scrapes the Price of the Product
     def scrapePrice(self, driver):
         try:
             price = driver.find_element_by_class_name('display-price').text
@@ -146,6 +168,7 @@ class EbayScraper():
                     print('\tERROR: Failed to scrape item price, most probably a non-existent page')
         return price
 
+    # Scrapes the Name of the Product
     def scrapeTitle(self, driver):
         try:
             title = driver.find_element_by_class_name('product-title').text
@@ -160,6 +183,7 @@ class EbayScraper():
                     # print('\tERROR: Failed to scrape item title\n', e)
         return title
 
+    # Scrapes the Seller of the Product
     def scrapeISeller(self, driver):
         seller = None
         try:
@@ -175,7 +199,8 @@ class EbayScraper():
                     print('\tERROR: Failed to scrape seller')
         return seller
 
-    def scrapeSoldOut(self, driver): # scrapes the sold out alert shown in the website
+    # Scrapes the sold out alerts shown in the website
+    def scrapeSoldOut(self, driver):
         sold_out = None
         messages = driver.find_elements_by_class_name('msgTextAlign')
         if(len(messages) > 0):
@@ -186,6 +211,7 @@ class EbayScraper():
                 sold_out = 'Yes'
         return sold_out
 
+    # Searches the Best Match using the Name of the Product
     def searchTitle(self, driver, title):
         # clean the title
         try:
@@ -211,6 +237,7 @@ class EbayScraper():
                 wait += 1
         return search_results
     
+    # Changes the View Settings to show Item ID and Item Seller
     def setViewIDSeller(self, driver): # opens customization view then sets the setting to show the seller id and item id of the item
         iteration = 1
         success = False
@@ -235,6 +262,7 @@ class EbayScraper():
                     break
             iteration += 1
 
+    # Scrapes the Seller of the first Best Match
     def scrapeSeller(self, driver):
         try:
             seller = driver.find_element_by_class_name('s-item__seller-info-text').text.split(': ')[1].split(' ')[0]
@@ -243,6 +271,7 @@ class EbayScraper():
             print('\tERROR: Failed to get first_seller\n')
         return seller
 
+    # Scrapes the ID of the first Best Match
     def scrapeFirstID(self, driver):
         try:
             first_id = driver.find_element_by_class_name('s-item__item-id').text.split(': ')[1]
@@ -251,6 +280,7 @@ class EbayScraper():
             # print('Failed to get first_seller\n')
         return first_id
 
+    # Scrapes the Price of the second Best Match
     def scrapeSecondPrice(self, driver):
         # get the price of the second best
         try:
@@ -261,6 +291,7 @@ class EbayScraper():
             pass
         return best_match_price
 
+    # Scrapes the Price of the Lowest Price + P&P
     def scrapeSortPrice(self, driver):
         try:
             price = driver.find_element_by_class_name('s-item__price').text
@@ -269,10 +300,17 @@ class EbayScraper():
             print('\tERROR: Failed to get the seller id\n', e)
         return price
 
+    # Asks the user for the Filenames
     def getFilename(self, name):
-        fileName = input('Enter your {} .xlsx file name: '.format(name))
-        return fileName
+        filename = None
+        while(filename == None or '.xlsx' not in filename): # only takes .xlsx as format
+            filename = input('Enter your {} .xlsx file name: '.format(name))
+            if('.xlsx' not in filename):
+                print('Please make sure you include .xlsx')
+                os.system('cls')
+        return filename
 
+    # Change Directory with Error Handling
     def changeDirectory(self, dirName):
         try:
             os.chdir(dirName)
@@ -281,6 +319,7 @@ class EbayScraper():
             last = input('Press enter to exit...')
             exit()
 
+    # Extracts the items within the filename.xlsx
     def getItems(self, filename):
         try:
             df = pd.read_excel(filename)
@@ -293,6 +332,7 @@ class EbayScraper():
             exit()
         return len(self.item_ids)
     
+    # Extracts the sellers within the filename.xlsx
     def getSellers(self, filename):
         try:
             df = pd.read_excel(filename)
@@ -305,10 +345,12 @@ class EbayScraper():
             exit()
         return len(self.item_ids)
 
+    # Creates the Workbook and the headers.
     def initializeWorkbook(self, filename):
         workbook = xlsxwriter.Workbook(filename.split('.')[0] + '-output.xlsx')
+        bold = workbook.add_format({'bold': True})
         self.worksheet = workbook.add_worksheet()
-        self.worksheet.set_column('A:J', 15)
+        self.worksheet.set_column('A:O', 15)
         self.worksheet.set_column('C:C', 30)
 
         self.writeRow(0, [
@@ -327,14 +369,19 @@ class EbayScraper():
             'Sort Seller ID(6)',
             'Sort Same Seller',
             'Sort Lowest + P&P Price(7)', 
-        ])
-
+        ], bold)
+        
         return workbook
 
-    def writeRow(self, row, contents):
-        for i, content in enumerate(contents):    # write all the contents to a row
-            self.worksheet.write(row, i, str(content) if content != None else '') # in self.worksheet
+    def writeRow(self, row, contents, formatter = None):
+        if(formatter == None):
+            for i, content in enumerate(contents):    # write all the contents to a row
+                self.worksheet.write(row, i, content) # in self.worksheet
+        else:
+            for i, content in enumerate(contents):    # write all the contents to a row
+                self.worksheet.write(row, i, content, formatter) # in self.worksheet in format
 
+    # Sets up chromeOptions for the Web Driver Settings
     def settingDriverOptions(self):
         # webdriver options
         self.chromeOptions.add_argument('--kiosk') # sets the headless browser into full screen mode
@@ -347,6 +394,7 @@ class EbayScraper():
         # self.chromeOptions.add_argument("--disable-plugins-discovery")
         self.chromeOptions.page_load_strategy = 'normal'
 
+    # Runs the driver
     def runDriver(self):
         try:
             driver = webdriver.Chrome('./chromedriver/chromedriver', options=self.chromeOptions) # opens the headless browser
@@ -356,15 +404,17 @@ class EbayScraper():
             exit()
         return driver
 
+    # Goes to the URL
     def getPage(self, driver, url):
         try:
             driver.get(url)
         except Exception as e:
             print('\tERROR: Failed to load page ' + url + '\n', e)
 
+    # Saves the data saved into the dictionary self.sellers
     def saveData(self, workbook):
         row = 1
-        for seller in sorted(self.sellers.keys()):
+        for seller in sorted(self.sellers.keys(), reverse=True):
             for items in sorted(self.sellers[seller], key=lambda item: (item[6], item[14]), reverse=True):
                 self.writeRow(row, items)
                 row += 1
@@ -372,6 +422,7 @@ class EbayScraper():
         workbook.close()
         self.changeDirectory('..')
 
+    # Close the Driver
     def closeDriver(self, driver):
         try:
             driver.close()
