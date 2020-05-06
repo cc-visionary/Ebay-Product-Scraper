@@ -4,7 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.ui import Select
-# from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions as EC
 
 import os
 import pandas as pd
@@ -23,14 +23,12 @@ class EbayScraper():
         self.base_url = 'https://www.ebay.co.uk/'
         self.tag = 'itm/' # % is the item id
         self.total_time = 0
+        self.shown = False
 
     def start(self):
         start_time = datetime.now()
-        print(start_time)
-        itemfilename = 'data.xlsx'
-        sellerfilename = 'same.xlsx'
-        # itemfilename = self.getFilename('Item IDs') # asks for user input file
-        # sellerfilename = self.getFilename('Seller IDs') # asks for seller input file
+        itemfilename = self.getFilename('Item IDs') # asks for user input file
+        sellerfilename = self.getFilename('Seller IDs') # asks for seller input file
         workbook = self.initializeWorkbook(itemfilename)
         self.settingDriverOptions()
         self.changeDirectory('./input') # go to input folder
@@ -64,11 +62,15 @@ class EbayScraper():
                 search_result = self.searchTitle(driver, title)
                 if(int(search_result) > 0):
                     print('\tINFO: There are ' + search_result + ' search results as Best Match.')
-                    if(i == 0):
+                    if(self.shown == False):
                         time.sleep(1)
                         self.setViewIDSeller(driver)
+
                     first_seller = self.scrapeSeller(driver)
                     first_id = self.scrapeFirstID(driver)
+                    if(first_id == None and first_id == None):
+                        dump = input('ERROR: Please run the program again...')
+                        exit()
 
                     if(first_seller):
                         if(first_seller in self.seller_ids):
@@ -138,7 +140,7 @@ class EbayScraper():
             print('{}/{}: Succesfully scraped Item {}. Time Taken: {}s\n'.format(i + 1, numItems, item, current_time))
         self.saveData(workbook)
         self.closeDriver(driver)
-        print('Congratulations! You\'ve successfully scraped {}'.format())
+        print('Congratulations! You\'ve successfully scraped {} items'.format(numItems))
         print('Stats:')
         print('\tAverage Time per Product: {}s'.format(round(self.total_time / 200, 2)))
         total_time = str(datetime.now() - start_time).split(':')
@@ -202,13 +204,17 @@ class EbayScraper():
     # Scrapes the sold out alerts shown in the website
     def scrapeSoldOut(self, driver):
         sold_out = None
-        messages = driver.find_elements_by_class_name('msgTextAlign')
-        if(len(messages) > 0):
-            sold_out = 'Yes'
-        else:
-            soldout = driver.find_elements_by_class_name('outofstock')
-            if(len(soldout) == 1):
+        try:
+            message = driver.find_element_by_class_name('msgTextAlign').text
+            if(message != ''):
                 sold_out = 'Yes'
+            else:
+                soldout = driver.find_elements_by_class_name('outofstock')
+                if(len(soldout) == 1):
+                    sold_out = 'Yes'
+        except:
+            pass
+        print(sold_out)
         return sold_out
 
     # Searches the Best Match using the Name of the Product
@@ -225,16 +231,14 @@ class EbayScraper():
         driver.get(self.base_url + 'sch/' + new_title + '&_stpos=OL98JR')
 
         search_results = None
-        wait = 0
-        while(search_results == None and wait <= 10): # waits for the search result to load
-            if(wait >= 10):
-                print('\tERROR: Waited too long (10 seconds) for the search result')
-                search_results = '0'
-            try: 
-                search_results = driver.find_element_by_class_name('srp-controls__count-heading').find_elements_by_tag_name('span')[0].text
-            except:
-                time.sleep(1) # wait for the page to load for 1 sec
-                wait += 1
+        
+        wait = WebDriverWait(driver, 180)
+        try:
+            wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'srp-controls__count-heading')))
+            search_results = driver.find_element_by_class_name('srp-controls__count-heading').find_elements_by_tag_name('span')[0].text
+        except Exception as e:
+            print('\tERROR: Waited too long (180 seconds/3 minutes) for the search result\n', e)  
+       
         return search_results
     
     # Changes the View Settings to show Item ID and Item Seller
@@ -260,7 +264,8 @@ class EbayScraper():
                     except Exception as e:
                         print('\tERROR: Can\'t open the customization')
                     break
-            iteration += 1
+            iteration += 1    
+        self.shown = True
 
     # Scrapes the Seller of the first Best Match
     def scrapeSeller(self, driver):
@@ -268,7 +273,7 @@ class EbayScraper():
             seller = driver.find_element_by_class_name('s-item__seller-info-text').text.split(': ')[1].split(' ')[0]
         except Exception as e:
             seller = None
-            print('\tERROR: Failed to get first_seller\n')
+            print('\tERROR: Failed to get first_seller')
         return seller
 
     # Scrapes the ID of the first Best Match
@@ -415,7 +420,7 @@ class EbayScraper():
     def saveData(self, workbook):
         row = 1
         for seller in sorted(self.sellers.keys(), reverse=True):
-            for items in sorted(self.sellers[seller], key=lambda item: (item[6], item[14]), reverse=True):
+            for items in sorted(self.sellers[seller], key=lambda item: (item[6], item[11], item[14]), reverse=True):
                 self.writeRow(row, items)
                 row += 1
         self.changeDirectory('./output')
