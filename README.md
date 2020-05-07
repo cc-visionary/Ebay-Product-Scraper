@@ -1,5 +1,5 @@
 # Ebay-Product-Scraper 
-This web scraper program is useful for those who are using Ebay and would want to check whether the item they're selling is the cheapest or not. From that knowledge, you'll be able to adjust your prices if yours is too high or you can also use it to scout prices. 
+This web scraper program is useful for those who are using Ebay and would want to check whether the item they're selling is the cheapest or not. From that knowledge, you'll be able to adjust your prices if yours is too high or you can also use it to scout prices. You can get the documentation in this link https://docs.google.com/document/d/1emT28jOHaI44B8gtHYnciKcVmExIeg6465uTYvO1HNc/edit?usp=sharing
 
 # Method
 1. Extract the **Item IDs**(to know which items to check) and **Seller IDs**(to distinguish which accounts are yours) from .xlsx Files
