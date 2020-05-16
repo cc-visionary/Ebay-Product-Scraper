@@ -11,3 +11,5 @@ This web scraper program is useful for those who are using Ebay and would want t
 7. Then extract the price, item id, and seller of **product with the lowest price**
 
 # Screenshots:
+<img src="./screenshots/excel_explanation.png" alt="Explanation of Excel File" />  
+<img src="./screenshots/sort_lowest_price.png" alt="Sorted Lowest Price + P&P" />
